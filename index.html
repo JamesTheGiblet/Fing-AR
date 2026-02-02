@@ -592,10 +592,6 @@
         document.addEventListener('touchstart', (e) => e.preventDefault(), { passive: false });
         document.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
         
-        // Service Worker for PWA (optional)
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('/sw.js').catch(console.error);
-        }
     </script>
 </body>
 </html>
