@@ -6,7 +6,7 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>AR Finger Sketch</title>
+    <title>FingAR - AR Finger Sketch</title>
     <style>
         * {
             margin: 0;
@@ -18,7 +18,7 @@
             -webkit-user-select: none;
             user-select: none;
         }
-        
+
         body {
             background: #000;
             overflow: hidden;
@@ -27,13 +27,13 @@
             height: 100%;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         }
-        
+
         #container {
             position: relative;
             width: 100%;
             height: 100%;
         }
-        
+
         #video {
             position: absolute;
             top: 0;
@@ -44,7 +44,7 @@
             transform: scaleX(-1);
             opacity: 0.7;
         }
-        
+
         #outputCanvas, #drawCanvas {
             position: absolute;
             top: 0;
@@ -53,11 +53,11 @@
             height: 100%;
             pointer-events: none;
         }
-        
+
         #drawCanvas {
             z-index: 10;
         }
-        
+
         .controls {
             position: absolute;
             bottom: 20px;
@@ -70,7 +70,7 @@
             padding: 0 20px;
             flex-wrap: wrap;
         }
-        
+
         .btn {
             background: rgba(0, 0, 0, 0.7);
             color: white;
@@ -90,12 +90,12 @@
             justify-content: center;
             gap: 8px;
         }
-        
-        .btn:hover, .btn:active {
+
+        .btn:active {
             background: rgba(255, 255, 255, 0.2);
-            transform: scale(1.05);
+            transform: scale(0.95);
         }
-        
+
         .color-picker {
             position: absolute;
             bottom: 90px;
@@ -106,7 +106,7 @@
             justify-content: center;
             z-index: 100;
         }
-        
+
         .color-option {
             width: 40px;
             height: 40px;
@@ -115,12 +115,12 @@
             cursor: pointer;
             transition: transform 0.2s;
         }
-        
+
         .color-option.active {
             transform: scale(1.2);
             box-shadow: 0 0 15px rgba(255, 255, 255, 0.8);
         }
-        
+
         .status {
             position: absolute;
             top: 20px;
@@ -134,23 +134,7 @@
             padding: 10px;
             backdrop-filter: blur(5px);
         }
-        
-        .debug {
-            position: absolute;
-            top: 60px;
-            left: 10px;
-            color: lime;
-            font-size: 12px;
-            font-family: monospace;
-            background: rgba(0, 0, 0, 0.5);
-            padding: 5px;
-            border-radius: 5px;
-            z-index: 100;
-            max-width: 200px;
-            word-break: break-all;
-            display: none;
-        }
-        
+
         .instruction {
             position: absolute;
             top: 50%;
@@ -158,25 +142,25 @@
             transform: translate(-50%, -50%);
             color: white;
             text-align: center;
-            background: rgba(0, 0, 0, 0.8);
+            background: rgba(0, 0, 0, 0.9);
             padding: 30px;
             border-radius: 20px;
             backdrop-filter: blur(10px);
             z-index: 1000;
             max-width: 90%;
         }
-        
+
         .instruction h3 {
             margin-bottom: 15px;
             font-size: 24px;
         }
-        
+
         .instruction p {
             margin-bottom: 10px;
             font-size: 16px;
             opacity: 0.9;
         }
-        
+
         .close-btn {
             position: absolute;
             top: 10px;
@@ -187,14 +171,14 @@
             background: none;
             border: none;
         }
-        
+
         @media (max-width: 600px) {
             .btn {
                 padding: 10px 20px;
                 font-size: 14px;
                 min-width: 80px;
             }
-            
+
             .controls {
                 gap: 10px;
                 padding: 0 10px;
@@ -204,30 +188,28 @@
 </head>
 <body>
     <div id="container">
-        <video id="video" playsinline autoplay></video>
+        <video id="video" playsinline autoplay muted></video>
         <canvas id="outputCanvas"></canvas>
         <canvas id="drawCanvas"></canvas>
-        
-        <div class="status" id="status">Initializing...</div>
-        <div class="debug" id="debug"></div>
-        
+
+        <div class="status" id="status">Tap screen to start</div>
+
         <div class="instruction" id="instruction">
             <button class="close-btn" onclick="closeInstruction()">×</button>
-            <h3>AR Finger Sketch</h3>
-            <p>👆 Pinch your index finger and thumb together to draw</p>
-            <p>🎨 Tap colors to change drawing color</p>
+            <h3>🎨 FingAR</h3>
+            <p>👆 Pinch index finger + thumb to draw</p>
+            <p>🎨 Tap colors to change</p>
             <p>🗑️ Clear to start over</p>
-            <p>📱 Works best on mobile devices</p>
-            <p>Click anywhere to begin!</p>
+            <p><strong>Tap anywhere to begin!</strong></p>
         </div>
-        
+
         <div class="controls">
             <button class="btn" id="clearBtn">🗑️ Clear</button>
             <button class="btn" id="undoBtn">↩️ Undo</button>
             <button class="btn" id="cameraBtn">📷 Flip</button>
-            <button class="btn" id="arBtn">✨ AR Mode</button>
+            <button class="btn" id="arBtn">✨ AR</button>
         </div>
-        
+
         <div class="color-picker" id="colorPicker">
             <div class="color-option active" style="background: #ff0000;" data-color="#ff0000"></div>
             <div class="color-option" style="background: #00ff00;" data-color="#00ff00"></div>
@@ -239,137 +221,252 @@
         </div>
     </div>
 
+    <!-- MediaPipe Hands - Most reliable for mobile -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
     <script>
         // Global variables
         let video, outputCanvas, drawCanvas;
         let outputCtx, drawCtx;
-        let model = null;
-        let predictions = [];
+        let hands = null;
+        let camera = null;
         let isDrawing = false;
         let currentColor = '#ff0000';
         let lineWidth = 8;
-        let useBackCamera = false; // Start with front camera for easier hand positioning
+        let useBackCamera = false;
         let isARMode = false;
         let drawingHistory = [];
-        let lastPoint = { x: 0, y: 0 };
-        
+        let currentStroke = [];
+        let initialized = false;
+
+        // User must tap to start (for Android autoplay policies)
+        document.addEventListener('click', async function initOnTap() {
+            if (!initialized) {
+                initialized = true;
+                await init();
+                document.removeEventListener('click', initOnTap);
+            }
+        }, { once: true });
+
         // Initialize app
         async function init() {
-            updateStatus("Loading hand tracking model...");
-            
+            updateStatus("Loading hand tracking...");
+
             // Get DOM elements
             video = document.getElementById('video');
             outputCanvas = document.getElementById('outputCanvas');
             drawCanvas = document.getElementById('drawCanvas');
             outputCtx = outputCanvas.getContext('2d');
             drawCtx = drawCanvas.getContext('2d');
-            
+
             // Set canvas sizes to match screen
             resizeCanvas();
-            
+
             try {
-                // Load TensorFlow.js and Handpose model from CDN
-                await loadTensorFlow();
-                model = await loadHandposeModel();
-                
+                // Initialize MediaPipe Hands
+                hands = new Hands({
+                    locateFile: (file) => {
+                        return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+                    }
+                });
+
+                hands.setOptions({
+                    maxNumHands: 1,
+                    modelComplexity: 1,
+                    minDetectionConfidence: 0.5,
+                    minTrackingConfidence: 0.5
+                });
+
+                hands.onResults(onResults);
+
                 // Start camera
                 await startCamera();
-                
+
                 // Setup event listeners
                 setupEventListeners();
-                
-                // Start hand detection loop
+
                 updateStatus("Ready! Pinch to draw 👆");
-                detectHand();
-                
+
+                // Hide instruction after 3 seconds
+                setTimeout(() => {
+                    closeInstruction();
+                }, 3000);
+
             } catch (error) {
                 updateStatus("Error: " + error.message);
                 console.error(error);
             }
         }
-        
-        // Load TensorFlow.js from CDN
-        function loadTensorFlow() {
-            return new Promise((resolve, reject) => {
-                if (typeof tf !== 'undefined') {
-                    resolve();
-                    return;
-                }
-                
-                const script = document.createElement('script');
-                script.src = 'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.11.0/dist/tf.min.js';
-                script.onload = resolve;
-                script.onerror = () => reject(new Error('Failed to load TensorFlow.js'));
-                document.head.appendChild(script);
-            });
-        }
-        
-        // Load Handpose model from CDN
-        async function loadHandposeModel() {
-            await new Promise((resolve, reject) => {
-                const script = document.createElement('script');
-                script.src = 'https://cdn.jsdelivr.net/npm/@tensorflow-models/handpose@0.0.7/dist/handpose.min.js';
-                script.onload = resolve;
-                script.onerror = () => reject(new Error('Failed to load Handpose'));
-                document.head.appendChild(script);
-            });
-            
-            if (typeof handpose !== 'undefined') {
-                return await handpose.load();
-            } else {
-                throw new Error('Handpose model failed to load');
-            }
-        }
-        
-        // Start camera
+
+        // Start camera with MediaPipe
         async function startCamera() {
-            const constraints = {
-                video: {
-                    facingMode: useBackCamera ? 'environment' : 'user',
-                    width: { ideal: 1280 },
-                    height: { ideal: 720 },
-                    frameRate: { ideal: 30 }
-                }
-            };
-            
             try {
-                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: useBackCamera ? 'environment' : 'user',
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    }
+                });
+
                 video.srcObject = stream;
-                await video.play();
+
+                await new Promise((resolve) => {
+                    video.onloadedmetadata = () => {
+                        video.play();
+                        resolve();
+                    };
+                });
+
+                // Initialize camera for MediaPipe
+                if (camera) {
+                    camera.stop();
+                }
+
+                camera = new Camera(video, {
+                    onFrame: async () => {
+                        await hands.send({image: video});
+                    },
+                    width: 1280,
+                    height: 720
+                });
+
+                camera.start();
+
             } catch (error) {
                 updateStatus("Camera error: " + error.message);
                 throw error;
             }
         }
-        
+
+        // Process hand detection results
+        function onResults(results) {
+            // Clear debug canvas
+            outputCtx.clearRect(0, 0, outputCanvas.width, outputCanvas.height);
+
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                const landmarks = results.multiHandLandmarks[0];
+
+                // Get finger landmarks (MediaPipe uses normalized coordinates)
+                const indexTip = landmarks[8];   // Index finger tip
+                const thumbTip = landmarks[4];   // Thumb tip
+
+                // Convert to screen coordinates
+                const indexPos = {
+                    x: indexTip.x * outputCanvas.width,
+                    y: indexTip.y * outputCanvas.height
+                };
+
+                const thumbPos = {
+                    x: thumbTip.x * outputCanvas.width,
+                    y: thumbTip.y * outputCanvas.height
+                };
+
+                // Calculate pinch distance
+                const distance = Math.sqrt(
+                    Math.pow(indexPos.x - thumbPos.x, 2) + 
+                    Math.pow(indexPos.y - thumbPos.y, 2)
+                );
+
+                // Pinch detection (drawing gesture)
+                const pinchThreshold = 50;
+
+                if (distance < pinchThreshold) {
+                    if (!isDrawing) {
+                        // Start new stroke
+                        isDrawing = true;
+                        currentStroke = [];
+                        drawCtx.beginPath();
+                        drawCtx.moveTo(indexPos.x, indexPos.y);
+
+                        currentStroke.push({
+                            type: 'start',
+                            x: indexPos.x,
+                            y: indexPos.y,
+                            color: currentColor,
+                            width: lineWidth
+                        });
+                    } else {
+                        // Continue drawing
+                        drawCtx.strokeStyle = currentColor;
+                        drawCtx.lineWidth = lineWidth;
+                        drawCtx.lineTo(indexPos.x, indexPos.y);
+                        drawCtx.stroke();
+
+                        currentStroke.push({
+                            type: 'line',
+                            x: indexPos.x,
+                            y: indexPos.y
+                        });
+                    }
+
+                    // Draw pinch indicator (green circle)
+                    outputCtx.fillStyle = 'rgba(0, 255, 0, 0.6)';
+                    outputCtx.beginPath();
+                    outputCtx.arc(indexPos.x, indexPos.y, 20, 0, Math.PI * 2);
+                    outputCtx.fill();
+
+                } else {
+                    if (isDrawing) {
+                        // End stroke
+                        isDrawing = false;
+                        if (currentStroke.length > 0) {
+                            drawingHistory.push([...currentStroke]);
+                        }
+                        currentStroke = [];
+                    }
+
+                    // Draw finger indicators
+                    outputCtx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+                    outputCtx.beginPath();
+                    outputCtx.arc(indexPos.x, indexPos.y, 15, 0, Math.PI * 2);
+                    outputCtx.fill();
+
+                    outputCtx.fillStyle = 'rgba(255, 255, 0, 0.5)';
+                    outputCtx.beginPath();
+                    outputCtx.arc(thumbPos.x, thumbPos.y, 15, 0, Math.PI * 2);
+                    outputCtx.fill();
+                }
+            }
+        }
+
         // Resize canvas to match screen
         function resizeCanvas() {
             const width = window.innerWidth;
             const height = window.innerHeight;
-            
+
             outputCanvas.width = width;
             outputCanvas.height = height;
             drawCanvas.width = width;
             drawCanvas.height = height;
-            
+
             // Set drawing context properties
             drawCtx.lineCap = 'round';
             drawCtx.lineJoin = 'round';
             drawCtx.lineWidth = lineWidth;
+
+            // Redraw if there's history
+            if (drawingHistory.length > 0) {
+                redrawHistory();
+            }
         }
-        
+
         // Setup event listeners
         function setupEventListeners() {
             // Window resize
             window.addEventListener('resize', resizeCanvas);
-            window.addEventListener('orientationchange', resizeCanvas);
-            
+            window.addEventListener('orientationchange', () => {
+                setTimeout(resizeCanvas, 100);
+            });
+
             // Control buttons
             document.getElementById('clearBtn').addEventListener('click', clearCanvas);
             document.getElementById('undoBtn').addEventListener('click', undoLast);
             document.getElementById('cameraBtn').addEventListener('click', flipCamera);
             document.getElementById('arBtn').addEventListener('click', toggleARMode);
-            
+
             // Color picker
             document.querySelectorAll('.color-option').forEach(option => {
                 option.addEventListener('click', () => {
@@ -379,227 +476,94 @@
                     currentColor = option.dataset.color;
                 });
             });
-            
-            // Close instruction on tap
-            document.addEventListener('click', closeInstruction, { once: true });
         }
-        
-        // Hand detection loop
-        async function detectHand() {
-            if (!model || video.readyState !== 4) {
-                requestAnimationFrame(detectHand);
-                return;
-            }
-            
-            // Clear debug canvas
-            outputCtx.clearRect(0, 0, outputCanvas.width, outputCanvas.height);
-            
-            try {
-                // Detect hands
-                predictions = await model.estimateHands(video, {
-                    flipHorizontal: !useBackCamera
-                });
-                
-                if (predictions.length > 0) {
-                    const hand = predictions[0];
-                    
-                    // Get finger landmarks
-                    const landmarks = hand.landmarks;
-                    
-                    // Transform landmarks to screen coordinates
-                    const indexTip = transformLandmark(landmarks[8]); // Index finger tip
-                    const thumbTip = transformLandmark(landmarks[4]); // Thumb tip
-                    
-                    // Calculate pinch distance
-                    const distance = Math.sqrt(
-                        Math.pow(indexTip.x - thumbTip.x, 2) + 
-                        Math.pow(indexTip.y - thumbTip.y, 2)
-                    );
-                    
-                    // Draw debug landmarks
-                    if (document.getElementById('debug').style.display !== 'none') {
-                        drawLandmarks(landmarks);
-                    }
-                    
-                    // Pinch detection (drawing gesture)
-                    const pinchThreshold = 40;
-                    if (distance < pinchThreshold) {
-                        if (!isDrawing) {
-                            isDrawing = true;
-                            drawingHistory.push({
-                                type: 'start',
-                                color: currentColor,
-                                width: lineWidth
-                            });
-                            drawCtx.beginPath();
-                            drawCtx.moveTo(indexTip.x, indexTip.y);
-                        }
-                        
-                        // Draw line
-                        drawCtx.strokeStyle = currentColor;
-                        drawCtx.lineWidth = lineWidth;
-                        drawCtx.lineTo(indexTip.x, indexTip.y);
-                        drawCtx.stroke();
-                        
-                        // Store for undo
-                        if (lastPoint.x !== indexTip.x || lastPoint.y !== indexTip.y) {
-                            drawingHistory.push({
-                                type: 'line',
-                                points: [lastPoint.x, lastPoint.y, indexTip.x, indexTip.y],
-                                color: currentColor,
-                                width: lineWidth
-                            });
-                        }
-                        
-                        lastPoint = { x: indexTip.x, y: indexTip.y };
-                        
-                        // Draw pinch indicator
-                        outputCtx.fillStyle = 'rgba(0, 255, 0, 0.5)';
-                        outputCtx.beginPath();
-                        outputCtx.arc(indexTip.x, indexTip.y, 20, 0, Math.PI * 2);
-                        outputCtx.fill();
-                    } else {
-                        isDrawing = false;
-                    }
-                    
-                    // Update debug info
-                    updateDebug(`Hands: ${predictions.length}, Pinch: ${Math.round(distance)}`);
-                }
-                
-            } catch (error) {
-                console.error('Detection error:', error);
-            }
-            
-            // Continue loop
-            requestAnimationFrame(detectHand);
-        }
-        
-        // Transform landmark to screen coordinates
-        function transformLandmark(landmark) {
-            const videoRatio = video.videoWidth / video.videoHeight;
-            const screenRatio = window.innerWidth / window.innerHeight;
-            
-            let x, y;
-            
-            if (videoRatio > screenRatio) {
-                // Video is wider than screen
-                const scale = window.innerWidth / video.videoWidth;
-                x = landmark[0] * scale;
-                y = (landmark[1] - (video.videoHeight - window.innerHeight / scale) / 2) * scale;
-            } else {
-                // Video is taller than screen
-                const scale = window.innerHeight / video.videoHeight;
-                x = (landmark[0] - (video.videoWidth - window.innerWidth / scale) / 2) * scale;
-                y = landmark[1] * scale;
-            }
-            
-            // Mirror x coordinate if using front camera
-            if (!useBackCamera) {
-                x = window.innerWidth - x;
-            }
-            
-            return { x, y };
-        }
-        
-        // Draw landmarks for debugging
-        function drawLandmarks(landmarks) {
-            outputCtx.fillStyle = 'rgba(255, 0, 0, 0.7)';
-            
-            landmarks.forEach(landmark => {
-                const pos = transformLandmark(landmark);
-                outputCtx.beginPath();
-                outputCtx.arc(pos.x, pos.y, 4, 0, Math.PI * 2);
-                outputCtx.fill();
-            });
-        }
-        
+
         // Control functions
         function clearCanvas() {
             drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
             drawingHistory = [];
+            currentStroke = [];
             updateStatus("Canvas cleared");
         }
-        
+
         function undoLast() {
-            if (drawingHistory.length === 0) return;
-            
-            // Find the last complete stroke (from start to before next start)
-            let lastStartIndex = -1;
-            for (let i = drawingHistory.length - 1; i >= 0; i--) {
-                if (drawingHistory[i].type === 'start') {
-                    lastStartIndex = i;
-                    break;
-                }
+            if (drawingHistory.length === 0) {
+                updateStatus("Nothing to undo");
+                return;
             }
-            
-            if (lastStartIndex >= 0) {
-                // Remove everything from last start onwards
-                drawingHistory.splice(lastStartIndex);
-                
-                // Redraw everything
-                drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
-                redrawHistory();
-                updateStatus("Undo last stroke");
-            }
+
+            // Remove last stroke
+            drawingHistory.pop();
+
+            // Clear and redraw
+            drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+            redrawHistory();
+
+            updateStatus("Undo last stroke");
         }
-        
+
         function redrawHistory() {
-            drawingHistory.forEach(step => {
-                if (step.type === 'start') {
+            drawingHistory.forEach(stroke => {
+                if (stroke.length > 0) {
+                    const start = stroke[0];
                     drawCtx.beginPath();
-                    drawCtx.strokeStyle = step.color;
-                    drawCtx.lineWidth = step.width;
-                } else if (step.type === 'line') {
-                    drawCtx.moveTo(step.points[0], step.points[1]);
-                    drawCtx.lineTo(step.points[2], step.points[3]);
-                    drawCtx.stroke();
+                    drawCtx.strokeStyle = start.color;
+                    drawCtx.lineWidth = start.width;
+                    drawCtx.moveTo(start.x, start.y);
+
+                    for (let i = 1; i < stroke.length; i++) {
+                        if (stroke[i].type === 'line') {
+                            drawCtx.lineTo(stroke[i].x, stroke[i].y);
+                            drawCtx.stroke();
+                        }
+                    }
                 }
             });
         }
-        
+
         async function flipCamera() {
             useBackCamera = !useBackCamera;
-            
-            // Stop current stream
+            updateStatus("Flipping camera...");
+
+            // Stop current camera
+            if (camera) {
+                camera.stop();
+            }
+
             if (video.srcObject) {
                 video.srcObject.getTracks().forEach(track => track.stop());
             }
-            
-            // Start new camera
+
+            // Restart with new camera
             await startCamera();
-            updateStatus("Camera flipped");
+            updateStatus(useBackCamera ? "Back camera" : "Front camera");
         }
-        
+
         function toggleARMode() {
             isARMode = !isARMode;
             video.style.opacity = isARMode ? '0.3' : '0.7';
-            document.getElementById('arBtn').textContent = isARMode ? '📸 Normal' : '✨ AR Mode';
-            updateStatus(isARMode ? "AR Mode: Camera dimmed" : "Normal Mode");
+            document.getElementById('arBtn').textContent = isARMode ? '📸 Normal' : '✨ AR';
+            updateStatus(isARMode ? "AR Mode" : "Normal Mode");
         }
-        
+
         // UI Helper functions
         function updateStatus(message) {
             document.getElementById('status').textContent = message;
         }
-        
-        function updateDebug(message) {
-            document.getElementById('debug').textContent = message;
-        }
-        
+
         function closeInstruction() {
             document.getElementById('instruction').style.display = 'none';
-            document.getElementById('debug').style.display = 'block';
         }
-        
-        // Initialize on load
-        window.addEventListener('load', init);
-        
-        // Prevent default touch behaviors for better mobile experience
-        document.addEventListener('touchstart', (e) => {
-            if (e.target.closest('.btn') || e.target.closest('.color-option')) {
-                return; // Allow button clicks
+
+        // Prevent zoom on double-tap
+        let lastTouchEnd = 0;
+        document.addEventListener('touchend', function (event) {
+            const now = Date.now();
+            if (now - lastTouchEnd <= 300) {
+                event.preventDefault();
             }
-        }, { passive: true });
+            lastTouchEnd = now;
+        }, false);
     </script>
 </body>
 </html>
