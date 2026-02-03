@@ -200,6 +200,7 @@
             <p>👆 Pinch index finger + thumb to draw</p>
             <p>🎨 Tap colors to change</p>
             <p>🗑️ Clear to start over</p>
+            <p>✏️ Use Pencil mode to track objects</p>
             <p><strong>Tap anywhere to begin!</strong></p>
         </div>
 
@@ -208,6 +209,7 @@
             <button class="btn" id="undoBtn">↩️ Undo</button>
             <button class="btn" id="cameraBtn">📷 Flip</button>
             <button class="btn" id="arBtn">✨ AR</button>
+            <button class="btn" id="pencilBtn">✏️ Pencil</button>
         </div>
 
         <div class="color-picker" id="colorPicker">
@@ -240,6 +242,14 @@
         let drawingHistory = [];
         let currentStroke = [];
         let initialized = false;
+        let lastDrawTime = 0;
+        let currentDrawWidth = 8;
+        
+        // Pencil tracking variables
+        let isPencilMode = false;
+        let isCalibrating = false;
+        let pencilTarget = { r: 0, g: 255, b: 0 }; // Default green
+        let processCanvas, processCtx;
 
         // User must tap to start (for Android autoplay policies)
         document.addEventListener('click', async function initOnTap() {
@@ -263,6 +273,12 @@
 
             // Set canvas sizes to match screen
             resizeCanvas();
+
+            // Setup processing canvas for pencil tracking
+            processCanvas = document.createElement('canvas');
+            processCanvas.width = 160; // Low res for performance
+            processCanvas.height = 120;
+            processCtx = processCanvas.getContext('2d', { willReadFrequently: true });
 
             try {
                 // Initialize MediaPipe Hands
@@ -327,7 +343,11 @@
 
                 camera = new Camera(video, {
                     onFrame: async () => {
-                        await hands.send({image: video});
+                        if (isPencilMode) {
+                            processPencilTracking();
+                        } else {
+                            await hands.send({image: video});
+                        }
                     },
                     width: 1280,
                     height: 720
@@ -338,6 +358,116 @@
             } catch (error) {
                 updateStatus("Camera error: " + error.message);
                 throw error;
+            }
+        }
+
+        // Pencil Tracking Logic
+        function processPencilTracking() {
+            // Clear debug canvas
+            outputCtx.clearRect(0, 0, outputCanvas.width, outputCanvas.height);
+            
+            if (isCalibrating) return;
+
+            // Draw video to small process canvas
+            const ratio = video.videoWidth / video.videoHeight;
+            processCanvas.height = processCanvas.width / ratio;
+            processCtx.drawImage(video, 0, 0, processCanvas.width, processCanvas.height);
+            
+            const frame = processCtx.getImageData(0, 0, processCanvas.width, processCanvas.height);
+            const data = frame.data;
+            const tolerance = 50; // Color match tolerance
+            
+            let sumX = 0, sumY = 0, count = 0;
+            
+            for (let i = 0; i < data.length; i += 4) {
+                const r = data[i];
+                const g = data[i+1];
+                const b = data[i+2];
+                
+                // Simple Euclidean distance
+                const dist = Math.sqrt(
+                    Math.pow(r - pencilTarget.r, 2) +
+                    Math.pow(g - pencilTarget.g, 2) +
+                    Math.pow(b - pencilTarget.b, 2)
+                );
+                
+                if (dist < tolerance) {
+                    const pixelIdx = i / 4;
+                    const x = pixelIdx % processCanvas.width;
+                    const y = Math.floor(pixelIdx / processCanvas.width);
+                    sumX += x;
+                    sumY += y;
+                    count++;
+                }
+            }
+            
+            if (count > 0) {
+                // Average position (centroid)
+                const avgX = sumX / count;
+                const avgY = sumY / count;
+                
+                // Map back to screen coordinates
+                const screenRatio = outputCanvas.width / outputCanvas.height;
+                const videoRatio = video.videoWidth / video.videoHeight;
+                
+                let renderW, renderH, offsetX, offsetY;
+                
+                if (screenRatio > videoRatio) {
+                    renderW = outputCanvas.width;
+                    renderH = outputCanvas.width / videoRatio;
+                    offsetX = 0;
+                    offsetY = (outputCanvas.height - renderH) / 2;
+                } else {
+                    renderH = outputCanvas.height;
+                    renderW = outputCanvas.height * videoRatio;
+                    offsetX = (outputCanvas.width - renderW) / 2;
+                    offsetY = 0;
+                }
+                
+                // Map process canvas coords to render coords (Video is mirrored!)
+                const normX = 1 - (avgX / processCanvas.width);
+                const normY = avgY / processCanvas.height;
+                
+                const screenX = offsetX + (normX * renderW);
+                const screenY = offsetY + (normY * renderH);
+                
+                // Draw logic
+                if (!isDrawing) {
+                    isDrawing = true;
+                    currentStroke = [];
+                    lastDrawTime = Date.now();
+                    currentDrawWidth = lineWidth;
+                    currentStroke.push({ type: 'start', x: screenX, y: screenY, color: currentColor, width: lineWidth });
+                } else {
+                    const now = Date.now();
+                    const dt = now - lastDrawTime;
+                    const lastPoint = currentStroke[currentStroke.length - 1];
+                    const dist = Math.sqrt(Math.pow(screenX - lastPoint.x, 2) + Math.pow(screenY - lastPoint.y, 2));
+                    const speed = dist / (dt || 1);
+
+                    // Dynamic width: Faster = Thinner
+                    const targetWidth = Math.max(2, Math.min(lineWidth * 1.5, lineWidth * 1.5 - (speed * 2)));
+                    currentDrawWidth = currentDrawWidth * 0.6 + targetWidth * 0.4;
+
+                    drawCtx.beginPath();
+                    drawCtx.moveTo(lastPoint.x, lastPoint.y);
+                    drawCtx.lineTo(screenX, screenY);
+                    drawCtx.strokeStyle = currentColor;
+                    drawCtx.lineWidth = currentDrawWidth;
+                    drawCtx.stroke();
+                    currentStroke.push({ type: 'line', x: screenX, y: screenY, width: currentDrawWidth });
+                    lastDrawTime = now;
+                }
+                
+                // Indicator
+                outputCtx.fillStyle = currentColor;
+                outputCtx.beginPath();
+                outputCtx.arc(screenX, screenY, 10, 0, Math.PI * 2);
+                outputCtx.fill();
+            } else {
+                isDrawing = false;
+                if (currentStroke.length > 0) drawingHistory.push([...currentStroke]);
+                currentStroke = [];
             }
         }
 
@@ -466,6 +596,8 @@
             document.getElementById('undoBtn').addEventListener('click', undoLast);
             document.getElementById('cameraBtn').addEventListener('click', flipCamera);
             document.getElementById('arBtn').addEventListener('click', toggleARMode);
+            document.getElementById('pencilBtn').addEventListener('click', togglePencilMode);
+            document.getElementById('container').addEventListener('click', handleCalibration);
 
             // Color picker
             document.querySelectorAll('.color-option').forEach(option => {
@@ -506,15 +638,23 @@
             drawingHistory.forEach(stroke => {
                 if (stroke.length > 0) {
                     const start = stroke[0];
-                    drawCtx.beginPath();
+                    let prevX = start.x;
+                    let prevY = start.y;
+                    let prevWidth = start.width;
+
                     drawCtx.strokeStyle = start.color;
-                    drawCtx.lineWidth = start.width;
-                    drawCtx.moveTo(start.x, start.y);
 
                     for (let i = 1; i < stroke.length; i++) {
-                        if (stroke[i].type === 'line') {
-                            drawCtx.lineTo(stroke[i].x, stroke[i].y);
+                        const point = stroke[i];
+                        if (point.type === 'line') {
+                            drawCtx.beginPath();
+                            drawCtx.moveTo(prevX, prevY);
+                            drawCtx.lineTo(point.x, point.y);
+                            drawCtx.lineWidth = point.width || prevWidth;
                             drawCtx.stroke();
+                            prevX = point.x;
+                            prevY = point.y;
+                            prevWidth = point.width || prevWidth;
                         }
                     }
                 }
@@ -544,6 +684,72 @@
             video.style.opacity = isARMode ? '0.3' : '0.7';
             document.getElementById('arBtn').textContent = isARMode ? '📸 Normal' : '✨ AR';
             updateStatus(isARMode ? "AR Mode" : "Normal Mode");
+        }
+
+        function togglePencilMode() {
+            isPencilMode = !isPencilMode;
+            const btn = document.getElementById('pencilBtn');
+            
+            if (isPencilMode) {
+                btn.style.background = '#4CAF50'; // Green to show active
+                isCalibrating = true;
+                updateStatus("Tap the pencil tip on screen to calibrate!");
+                clearCanvas();
+            } else {
+                btn.style.background = ''; // Reset
+                isCalibrating = false;
+                updateStatus("Hand mode active");
+            }
+        }
+
+        function handleCalibration(e) {
+            if (!isPencilMode || !isCalibrating) return;
+            
+            // Don't trigger if clicking controls
+            if (e.target.closest('.controls') || e.target.closest('.color-picker')) return;
+
+            // Capture color from video at click location
+            const ratio = video.videoWidth / video.videoHeight;
+            
+            // Create a temp canvas to read the full video frame
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = video.videoWidth;
+            tempCanvas.height = video.videoHeight;
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCtx.drawImage(video, 0, 0);
+            
+            // Calculate click position relative to video
+            const screenRatio = window.innerWidth / window.innerHeight;
+            let renderW, renderH, offsetX, offsetY;
+            
+            if (screenRatio > ratio) {
+                renderW = window.innerWidth;
+                renderH = window.innerWidth / ratio;
+                offsetX = 0;
+                offsetY = (window.innerHeight - renderH) / 2;
+            } else {
+                renderH = window.innerHeight;
+                renderW = window.innerHeight * ratio;
+                offsetX = (window.innerWidth - renderW) / 2;
+                offsetY = 0;
+            }
+            
+            // Map click to video coords (handling mirror)
+            const normX = 1 - ((e.clientX - offsetX) / renderW);
+            const normY = (e.clientY - offsetY) / renderH;
+            
+            const vidX = Math.max(0, Math.min(video.videoWidth - 1, Math.floor(normX * video.videoWidth)));
+            const vidY = Math.max(0, Math.min(video.videoHeight - 1, Math.floor(normY * video.videoHeight)));
+            
+            const pixel = tempCtx.getImageData(vidX, vidY, 1, 1).data;
+            pencilTarget = { r: pixel[0], g: pixel[1], b: pixel[2] };
+            
+            isCalibrating = false;
+            updateStatus("Pencil calibrated! Start drawing.");
+            
+            // Visual feedback
+            const btn = document.getElementById('pencilBtn');
+            btn.style.borderColor = `rgb(${pixel[0]}, ${pixel[1]}, ${pixel[2]})`;
         }
 
         // UI Helper functions
